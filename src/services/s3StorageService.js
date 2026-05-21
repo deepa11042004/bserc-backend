@@ -202,6 +202,29 @@ function buildHeroSlideMediaKey({ slideId, originalName, mimeType }) {
   return `hero/${year}/${idSlug}-${timestamp}-${random}${extension}`;
 }
 
+function buildFeaturedWorkshopBackgroundKey({ sectionId, originalName, mimeType }) {
+  const now = new Date();
+  const year = String(now.getUTCFullYear());
+  const timestamp = now.toISOString().replace(/[:.]/g, '-');
+  const random = crypto.randomBytes(6).toString('hex');
+  const idSlug = sanitizeSegment(sectionId || 'section') || 'section';
+  const extension = safeExtension(originalName, mimeType);
+
+  return `featured-workshops/background/${year}/${idSlug}-${timestamp}-${random}${extension}`;
+}
+
+function buildFeaturedWorkshopCardImageKey({ sectionId, cardId, position, originalName, mimeType }) {
+  const now = new Date();
+  const year = String(now.getUTCFullYear());
+  const timestamp = now.toISOString().replace(/[:.]/g, '-');
+  const random = crypto.randomBytes(6).toString('hex');
+  const sectionSlug = sanitizeSegment(sectionId || 'section') || 'section';
+  const cardSlug = sanitizeSegment(cardId || position || 'card') || 'card';
+  const extension = safeExtension(originalName, mimeType);
+
+  return `featured-workshops/cards/${year}/${sectionSlug}/${cardSlug}-${timestamp}-${random}${extension}`;
+}
+
 function buildMouSupportingDocumentKey({ mouRequestId, originalName, mimeType }) {
   const now = new Date();
   const year = String(now.getUTCFullYear());
@@ -315,6 +338,69 @@ async function uploadHeroSlideMedia({ buffer, mimeType, originalName, slideId })
   }
 
   const key = buildHeroSlideMediaKey({ slideId, originalName, mimeType });
+  const client = getS3Client();
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType || 'application/octet-stream',
+    }),
+  );
+
+  return { bucket, key, s3Path: `s3://${bucket}/${key}` };
+}
+
+async function uploadFeaturedWorkshopBackground({ buffer, mimeType, originalName, sectionId }) {
+  if (!Buffer.isBuffer(buffer)) {
+    throw new Error('Missing background buffer for featured workshop upload.');
+  }
+
+  const bucket = getBucketName();
+  if (!bucket) {
+    throw new Error('S3 bucket name is missing. Set AWS_S3_BUCKET in the environment.');
+  }
+
+  const key = buildFeaturedWorkshopBackgroundKey({ sectionId, originalName, mimeType });
+  const client = getS3Client();
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType || 'application/octet-stream',
+    }),
+  );
+
+  return { bucket, key, s3Path: `s3://${bucket}/${key}` };
+}
+
+async function uploadFeaturedWorkshopCardImage({
+  buffer,
+  mimeType,
+  originalName,
+  sectionId,
+  position,
+  cardId,
+}) {
+  if (!Buffer.isBuffer(buffer)) {
+    throw new Error('Missing card image buffer for featured workshop upload.');
+  }
+
+  const bucket = getBucketName();
+  if (!bucket) {
+    throw new Error('S3 bucket name is missing. Set AWS_S3_BUCKET in the environment.');
+  }
+
+  const key = buildFeaturedWorkshopCardImageKey({
+    sectionId,
+    position,
+    cardId,
+    originalName,
+    mimeType,
+  });
   const client = getS3Client();
 
   await client.send(
@@ -456,6 +542,52 @@ async function streamHeroSlideMedia({ s3Path }) {
   };
 }
 
+async function streamFeaturedWorkshopBackground({ s3Path }) {
+  const parsed = parseS3Path(s3Path);
+  if (!parsed) {
+    throw new Error('Invalid S3 path for featured workshop background.');
+  }
+
+  const client = getS3Client();
+  const response = await client.send(
+    new GetObjectCommand({ Bucket: parsed.bucket, Key: parsed.key }),
+  );
+
+  const chunks = [];
+  for await (const chunk of response.Body) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return {
+    buffer: Buffer.concat(chunks),
+    contentType: response.ContentType || 'application/octet-stream',
+    contentLength: response.ContentLength || null,
+  };
+}
+
+async function streamFeaturedWorkshopCardImage({ s3Path }) {
+  const parsed = parseS3Path(s3Path);
+  if (!parsed) {
+    throw new Error('Invalid S3 path for featured workshop card image.');
+  }
+
+  const client = getS3Client();
+  const response = await client.send(
+    new GetObjectCommand({ Bucket: parsed.bucket, Key: parsed.key }),
+  );
+
+  const chunks = [];
+  for await (const chunk of response.Body) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return {
+    buffer: Buffer.concat(chunks),
+    contentType: response.ContentType || 'application/octet-stream',
+    contentLength: response.ContentLength || null,
+  };
+}
+
 async function streamWorkshopThumbnail({ s3Path }) {
   const parsed = parseS3Path(s3Path);
   if (!parsed) {
@@ -516,6 +648,34 @@ async function deleteHeroSlideMedia({ s3Path }) {
   return true;
 }
 
+async function deleteFeaturedWorkshopBackground({ s3Path }) {
+  const parsed = parseS3Path(s3Path);
+  if (!parsed) {
+    return false;
+  }
+
+  const client = getS3Client();
+  await client.send(
+    new DeleteObjectCommand({ Bucket: parsed.bucket, Key: parsed.key }),
+  );
+
+  return true;
+}
+
+async function deleteFeaturedWorkshopCardImage({ s3Path }) {
+  const parsed = parseS3Path(s3Path);
+  if (!parsed) {
+    return false;
+  }
+
+  const client = getS3Client();
+  await client.send(
+    new DeleteObjectCommand({ Bucket: parsed.bucket, Key: parsed.key }),
+  );
+
+  return true;
+}
+
 async function deleteWorkshopThumbnail({ s3Path }) {
   const parsed = parseS3Path(s3Path);
   if (!parsed) {
@@ -536,6 +696,12 @@ module.exports = {
   uploadHeroSlideMedia,
   streamHeroSlideMedia,
   deleteHeroSlideMedia,
+  uploadFeaturedWorkshopBackground,
+  streamFeaturedWorkshopBackground,
+  deleteFeaturedWorkshopBackground,
+  uploadFeaturedWorkshopCardImage,
+  streamFeaturedWorkshopCardImage,
+  deleteFeaturedWorkshopCardImage,
   uploadWorkshopThumbnail,
   streamWorkshopThumbnail,
   deleteWorkshopThumbnail,
