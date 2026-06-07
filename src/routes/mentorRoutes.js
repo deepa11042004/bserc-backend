@@ -1,5 +1,6 @@
 const express = require('express');
 const mentorRegistrationController = require('../controllers/mentorRegistrationController');
+const mentorRatingController = require('../controllers/mentorRatingController');
 const { uploadMentorRegistrationFiles } = require('../middleware/mentorRegistrationUpload');
 
 const router = express.Router();
@@ -59,5 +60,11 @@ router.delete('/mentor/:id/reject', mentorRegistrationController.rejectMentor);
 router.get('/mentor/:id', mentorRegistrationController.getMentorById);
 router.get('/mentor/:id/resume', mentorRegistrationController.getMentorResume);
 router.get('/mentor/:id/profile-photo', mentorRegistrationController.getMentorProfilePhoto);
+
+// Mentor Rating Routes
+router.post('/mentor/:mentorId/rating', mentorRatingController.submitRating);
+router.get('/mentor/:mentorId/rating/average', mentorRatingController.getAverageRating);
+router.get('/mentor/:mentorId/ratings', mentorRatingController.getRatings);
+router.get('/mentor/:mentorId/rating/user', mentorRatingController.getUserRating);
 
 module.exports = router;
