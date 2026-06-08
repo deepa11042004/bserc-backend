@@ -690,6 +690,55 @@ async function deleteWorkshopThumbnail({ s3Path }) {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Project listing supporting document helpers
+// ---------------------------------------------------------------------------
+
+function buildProjectListingSupportingDocKey({ email, originalName, mimeType }) {
+  const now = new Date();
+  const year = String(now.getUTCFullYear());
+  const timestamp = now.toISOString().replace(/[:.]/g, '-');
+  const random = crypto.randomBytes(6).toString('hex');
+  const emailSlug = sanitizeSegment(email || 'unknown') || 'unknown';
+  const extension = safeExtension(originalName, mimeType);
+
+  return `project-listings/${year}/${emailSlug}/supporting-documents/${timestamp}-${random}${extension}`;
+}
+
+async function uploadProjectListingSupportingDoc({
+  buffer,
+  mimeType,
+  originalName,
+  email,
+}) {
+  if (!Buffer.isBuffer(buffer)) {
+    throw new Error('Missing supporting document buffer for project listing upload.');
+  }
+
+  const bucket = getBucketName();
+  if (!bucket) {
+    throw new Error('S3 bucket name is missing. Set AWS_S3_BUCKET in the environment.');
+  }
+
+  const key = buildProjectListingSupportingDocKey({
+    email,
+    originalName,
+    mimeType,
+  });
+
+  const client = getS3Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType || 'application/octet-stream',
+    }),
+  );
+
+  return { bucket, key, s3Path: `s3://${bucket}/${key}` };
+}
+
 module.exports = {
   uploadInternshipPassportPhoto,
   getPresignedObjectUrl,
@@ -710,4 +759,5 @@ module.exports = {
   uploadMentorResume,
   uploadMentorProfilePhoto,
   streamMentorRegistrationFile,
+  uploadProjectListingSupportingDoc,
 };

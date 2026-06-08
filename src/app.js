@@ -19,6 +19,7 @@ const featuredWorkshopSectionRoutes = require('./routes/featuredWorkshopSectionR
 const contactQueryRoutes = require('./routes/contactQueryRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const userDashboardRoutes = require('./routes/userDashboardRoutes');
+const projectListingRoutes = require('./routes/projectListingRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const swaggerSpec = require('./config/swagger');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
@@ -72,6 +73,7 @@ app.use('/api', featuredWorkshopSectionRoutes);
 app.use('/api', contactQueryRoutes);
 app.use('/api', ticketRoutes);
 app.use('/api/user-dashboard', userDashboardRoutes);
+app.use('/api', projectListingRoutes);
 
 app.use(errorHandler);
 
