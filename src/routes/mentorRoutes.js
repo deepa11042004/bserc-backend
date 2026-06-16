@@ -58,6 +58,7 @@ router.patch('/mentor/:id/pending', mentorRegistrationController.moveMentorToPen
 router.delete('/mentor/:id/reject', mentorRegistrationController.rejectMentor);
 
 router.get('/mentor/:id', mentorRegistrationController.getMentorById);
+router.patch('/mentor/:id', mentorRegistrationController.updateMentor);
 router.get('/mentor/:id/resume', mentorRegistrationController.getMentorResume);
 router.get('/mentor/:id/profile-photo', mentorRegistrationController.getMentorProfilePhoto);
 

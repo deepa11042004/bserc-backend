@@ -1327,6 +1327,64 @@ async function rejectMentorById(id) {
   return { outcome: 'deleted' };
 }
 
+const ADMIN_EDITABLE_COLUMNS = new Set([
+  'full_name', 'email', 'phone', 'dob', 'nationality',
+  'current_position', 'organization', 'years_experience', 'professional_bio',
+  'primary_track', 'secondary_skills', 'key_competencies',
+  'video_call', 'phone_call', 'live_chat', 'email_support',
+  'availability', 'max_students', 'session_duration',
+  'consultation_fee', 'price_5_sessions', 'price_10_sessions', 'price_extended',
+  'currency', 'honorarium_hourly', 'honorarium_daily', 'honorarium_weekly', 'honorarium_project',
+  'complimentary_session', 'linkedin_url', 'portfolio_url',
+  'has_mentored_before', 'mentoring_experience',
+  'accepted_guidelines', 'accepted_code_of_conduct',
+]);
+
+async function updateMentorProfileById(mentorId, fields) {
+  // Check mentor exists first so we can give an accurate not_found response
+  // (affectedRows = 0 in mysql2 default mode also means "no values changed",
+  //  so it cannot reliably distinguish between not-found and no-op updates)
+  const [existRows] = await db.query(
+    `SELECT id FROM ${MENTOR_REGISTRATION_TABLE} WHERE id = ? LIMIT 1`,
+    [mentorId]
+  );
+
+  if (!existRows || existRows.length === 0) {
+    return { outcome: 'not_found' };
+  }
+
+  const tableColumns = await getMentorTableColumns();
+
+  const assignments = [];
+  const values = [];
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (!ADMIN_EDITABLE_COLUMNS.has(key)) {
+      continue;
+    }
+    // Skip columns that don't exist in this DB schema
+    if (tableColumns && !tableColumns.has(key)) {
+      continue;
+    }
+    assignments.push(`${key} = ?`);
+    values.push(value ?? null);
+  }
+
+  if (assignments.length === 0) {
+    return { outcome: 'updated' };
+  }
+
+  await db.query(
+    `UPDATE ${MENTOR_REGISTRATION_TABLE}
+     SET ${assignments.join(', ')}
+     WHERE id = ?
+     LIMIT 1`,
+    [...values, mentorId]
+  );
+
+  return { outcome: 'updated' };
+}
+
 async function getMentorFileById(id, column) {
   if (!FILE_COLUMNS.has(column)) {
     throw new Error('Invalid file column');
@@ -1375,4 +1433,5 @@ module.exports = {
   approveMentorById,
   moveMentorToPendingById,
   rejectMentorById,
+  updateMentorProfileById,
 };

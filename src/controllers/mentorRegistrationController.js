@@ -619,6 +619,101 @@ async function moveMentorToPending(req, res) {
   }
 }
 
+async function updateMentor(req, res) {
+  try {
+    const mentorId = parseMentorId(req.params.id);
+    if (!mentorId) {
+      return res.status(400).json({ error: 'Invalid mentor id.' });
+    }
+
+    const body = req.body || {};
+    const errors = [];
+    const fields = {};
+
+    // Required text fields
+    if ('full_name' in body) {
+      const val = cleanText(body.full_name);
+      if (!val) { errors.push('full_name cannot be empty.'); }
+      else { fields.full_name = val; }
+    }
+    if ('email' in body) {
+      const val = cleanText(body.email).toLowerCase();
+      if (!val || !EMAIL_REGEX.test(val)) { errors.push('email format is invalid.'); }
+      else { fields.email = val; }
+    }
+    if ('phone' in body) {
+      const val = cleanText(body.phone);
+      if (!val) { errors.push('phone cannot be empty.'); }
+      else { fields.phone = val; }
+    }
+    if ('dob' in body) {
+      const val = cleanText(body.dob);
+      if (val && !isValidDateString(val)) { errors.push('dob must be a valid date in YYYY-MM-DD format.'); }
+      else { fields.dob = val || null; }
+    }
+
+    // Nationality
+    if ('nationality' in body) {
+      fields.nationality = normalizeMentorNationality(body.nationality) || null;
+    }
+
+    // Nullable text fields
+    if ('current_position' in body) { fields.current_position = toNullableText(body.current_position); }
+    if ('organization' in body) { fields.organization = toNullableText(body.organization); }
+    if ('professional_bio' in body) { fields.professional_bio = toNullableText(body.professional_bio); }
+    if ('primary_track' in body) { fields.primary_track = toNullableText(body.primary_track); }
+    if ('secondary_skills' in body) { fields.secondary_skills = toNullableText(body.secondary_skills); }
+    if ('key_competencies' in body) { fields.key_competencies = toNullableText(body.key_competencies); }
+    if ('availability' in body) { fields.availability = toNullableText(body.availability); }
+    if ('session_duration' in body) { fields.session_duration = toNullableText(body.session_duration); }
+    if ('mentoring_experience' in body) { fields.mentoring_experience = toNullableText(body.mentoring_experience); }
+    if ('linkedin_url' in body) { fields.linkedin_url = toNullableText(body.linkedin_url); }
+    if ('portfolio_url' in body) { fields.portfolio_url = toNullableText(body.portfolio_url); }
+    if ('currency' in body) { fields.currency = normalizeMentorCurrency(body.currency) || null; }
+
+    // Numeric fields
+    if ('years_experience' in body) { fields.years_experience = parseNullableInt(body.years_experience, 'years_experience', errors); }
+    if ('max_students' in body) { fields.max_students = parseNullableInt(body.max_students, 'max_students', errors); }
+    if ('consultation_fee' in body) { fields.consultation_fee = parseNullableDecimal(body.consultation_fee, 'consultation_fee', errors); }
+    if ('price_5_sessions' in body) { fields.price_5_sessions = parseNullableDecimal(body.price_5_sessions, 'price_5_sessions', errors); }
+    if ('price_10_sessions' in body) { fields.price_10_sessions = parseNullableDecimal(body.price_10_sessions, 'price_10_sessions', errors); }
+    if ('price_extended' in body) { fields.price_extended = parseNullableDecimal(body.price_extended, 'price_extended', errors); }
+    if ('honorarium_hourly' in body) { fields.honorarium_hourly = parseNullableDecimal(body.honorarium_hourly, 'honorarium_hourly', errors); }
+    if ('honorarium_daily' in body) { fields.honorarium_daily = parseNullableDecimal(body.honorarium_daily, 'honorarium_daily', errors); }
+    if ('honorarium_weekly' in body) { fields.honorarium_weekly = parseNullableDecimal(body.honorarium_weekly, 'honorarium_weekly', errors); }
+    if ('honorarium_project' in body) { fields.honorarium_project = parseNullableDecimal(body.honorarium_project, 'honorarium_project', errors); }
+
+    // Boolean fields
+    if ('video_call' in body) { fields.video_call = toBoolean(body.video_call, false); }
+    if ('phone_call' in body) { fields.phone_call = toBoolean(body.phone_call, false); }
+    if ('live_chat' in body) { fields.live_chat = toBoolean(body.live_chat, false); }
+    if ('email_support' in body) { fields.email_support = toBoolean(body.email_support, false); }
+    if ('complimentary_session' in body) { fields.complimentary_session = toBoolean(body.complimentary_session, false); }
+    if ('has_mentored_before' in body) {
+      fields.has_mentored_before = body.has_mentored_before === null || body.has_mentored_before === '' || body.has_mentored_before === undefined
+        ? null
+        : toBoolean(body.has_mentored_before, false);
+    }
+    if ('accepted_guidelines' in body) { fields.accepted_guidelines = toBoolean(body.accepted_guidelines, false); }
+    if ('accepted_code_of_conduct' in body) { fields.accepted_code_of_conduct = toBoolean(body.accepted_code_of_conduct, false); }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ error: errors.join(' ') });
+    }
+
+    const result = await mentorRegistrationService.updateMentorProfileById(mentorId, fields);
+
+    if (result.outcome === 'not_found') {
+      return res.status(404).json({ error: 'Mentor not found.' });
+    }
+
+    return res.status(200).json({ message: 'Mentor updated successfully.' });
+  } catch (err) {
+    console.error('Mentor update error:', err);
+    return res.status(500).json({ error: 'Failed to update mentor' });
+  }
+}
+
 async function rejectMentor(req, res) {
   try {
     const mentorId = parseMentorId(req.params.id);
@@ -653,4 +748,5 @@ module.exports = {
   approveMentor,
   moveMentorToPending,
   rejectMentor,
+  updateMentor,
 };
