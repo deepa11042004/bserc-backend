@@ -476,6 +476,7 @@ async function sendMentorFile(req, res, options) {
     }
 
     if (!result.file) {
+      res.set('Cache-Control', 'public, max-age=300');
       return res.status(404).json({ error: options.missingMessage });
     }
 

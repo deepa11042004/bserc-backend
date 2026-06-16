@@ -86,6 +86,29 @@ const MENTOR_REGISTRATION_BASE_COLUMNS = [
 
 let mentorTableColumnsPromise = null;
 
+// ── Active mentor list cache (public listing) ─────────────────────────────────
+let activeMentorsListCache = null;
+let activeMentorsCacheAt = 0;
+const ACTIVE_MENTORS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function invalidateActiveMentorsCache() {
+  activeMentorsListCache = null;
+  activeMentorsCacheAt = 0;
+}
+
+// Slim column set — only what the public listing cards actually render
+// has_profile_photo is a derived expression, not a real column — added separately in the query
+const MENTOR_LIST_COLUMNS = [
+  'id',
+  'full_name',
+  'current_position',
+  'organization',
+  'professional_bio',
+  'primary_track',
+  'secondary_skills',
+  'key_competencies',
+].join(', ');
+
 const BASE_MENTOR_DETAIL_COLUMNS = [
   'id',
   'full_name',
@@ -1241,7 +1264,48 @@ async function getPendingMentors() {
 }
 
 async function getActiveMentors() {
-  return getMentorsByStatus(MENTOR_STATUS_ACTIVE);
+  const now = Date.now();
+  if (activeMentorsListCache && (now - activeMentorsCacheAt) < ACTIVE_MENTORS_CACHE_TTL_MS) {
+    return activeMentorsListCache;
+  }
+
+  const [rows] = await db.query(
+    `SELECT
+      ${MENTOR_LIST_COLUMNS.split(', ').map(c => `m.${c}`).join(', ')},
+      (m.profile_photo_path IS NOT NULL AND m.profile_photo_path <> '') AS has_profile_photo,
+      agg.average_rating,
+      COALESCE(agg.total_ratings, 0) AS total_ratings
+     FROM ${MENTOR_REGISTRATION_TABLE} m
+     LEFT JOIN (
+       SELECT mentor_id,
+         ROUND(AVG(rating), 2) AS average_rating,
+         COUNT(*) AS total_ratings
+       FROM mentor_ratings
+       WHERE user_name IS NOT NULL OR user_email IS NOT NULL
+       GROUP BY mentor_id
+     ) agg ON agg.mentor_id = m.id
+     WHERE m.status = ?
+     ORDER BY m.created_at DESC, m.id DESC`,
+    [MENTOR_STATUS_ACTIVE]
+  );
+
+  const result = rows.map((row) => ({
+    id: Number(row.id),
+    full_name: row.full_name,
+    current_position: row.current_position,
+    organization: row.organization,
+    professional_bio: row.professional_bio,
+    primary_track: row.primary_track,
+    secondary_skills: row.secondary_skills,
+    key_competencies: row.key_competencies,
+    has_profile_photo: Boolean(row.has_profile_photo),
+    average_rating: row.average_rating != null ? Number(row.average_rating) : null,
+    total_ratings: Number(row.total_ratings) || 0,
+  }));
+
+  activeMentorsListCache = result;
+  activeMentorsCacheAt = now;
+  return result;
 }
 
 async function approveMentorById(id) {
@@ -1277,6 +1341,7 @@ async function approveMentorById(id) {
     );
 
     const mentor = await getMentorById(id);
+    invalidateActiveMentorsCache();
 
     return {
       outcome: 'approved',
@@ -1407,6 +1472,7 @@ async function updateMentorProfileById(mentorId, fields) {
     [...values, mentorId]
   );
 
+  invalidateActiveMentorsCache();
   return { outcome: 'updated' };
 }
 
