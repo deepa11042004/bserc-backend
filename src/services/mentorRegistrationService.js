@@ -501,6 +501,12 @@ function mapMentorDetails(row) {
     has_resume: toBoolean(row.has_resume),
     has_profile_photo: toBoolean(row.has_profile_photo),
     created_at: row.created_at,
+    average_rating: row.average_rating !== null && row.average_rating !== undefined
+      ? Number(row.average_rating)
+      : null,
+    total_ratings: row.total_ratings !== null && row.total_ratings !== undefined
+      ? Number(row.total_ratings)
+      : 0,
   };
 }
 
@@ -1174,15 +1180,24 @@ async function getMentorsByStatus(status) {
 
   let rows;
   const detailColumns = await getMentorDetailColumns();
-
   try {
     [rows] = await db.query(
       `SELECT
         ${detailColumns},
-        status
-       FROM ${MENTOR_REGISTRATION_TABLE}
-       WHERE status = ?
-       ORDER BY created_at DESC, id DESC`,
+        status,
+        agg.average_rating,
+        COALESCE(agg.total_ratings, 0) AS total_ratings
+       FROM ${MENTOR_REGISTRATION_TABLE} m
+       LEFT JOIN (
+         SELECT mentor_id,
+           ROUND(AVG(rating), 2) AS average_rating,
+           COUNT(*) AS total_ratings
+         FROM mentor_ratings
+         WHERE user_name IS NOT NULL OR user_email IS NOT NULL
+         GROUP BY mentor_id
+       ) agg ON agg.mentor_id = m.id
+       WHERE m.status = ?
+       ORDER BY m.created_at DESC, m.id DESC`,
       [status]
     );
   } catch (err) {
@@ -1197,9 +1212,19 @@ async function getMentorsByStatus(status) {
 
     [rows] = await db.query(
       `SELECT
-        ${detailColumns}
-       FROM ${MENTOR_REGISTRATION_TABLE}
-       ORDER BY created_at DESC, id DESC`
+        ${detailColumns},
+        agg.average_rating,
+        COALESCE(agg.total_ratings, 0) AS total_ratings
+       FROM ${MENTOR_REGISTRATION_TABLE} m
+       LEFT JOIN (
+         SELECT mentor_id,
+           ROUND(AVG(rating), 2) AS average_rating,
+           COUNT(*) AS total_ratings
+         FROM mentor_ratings
+         WHERE user_name IS NOT NULL OR user_email IS NOT NULL
+         GROUP BY mentor_id
+       ) agg ON agg.mentor_id = m.id
+       ORDER BY m.created_at DESC, m.id DESC`
     );
 
     rows = rows.map((row) => ({
