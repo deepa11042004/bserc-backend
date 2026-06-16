@@ -28,7 +28,6 @@ router.post(
  */
 router.get(
   '/project-listing/list',
-  authAdmin,
   projectListingController.getProjectListings
 );
 
