@@ -3,4 +3,5 @@ module.exports = {
   ADMIN: 'admin',
   INSTRUCTOR: 'instructor',
   SUPER_ADMIN: 'super_admin',
+  MENTOR: 'mentor',
 };

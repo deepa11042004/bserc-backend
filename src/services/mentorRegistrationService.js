@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const Razorpay = require('razorpay');
 
 const db = require('../config/db');
+const { hashPassword } = require('../utils/hashPassword');
 const {
   uploadMentorResume,
   uploadMentorProfilePhoto,
@@ -1308,10 +1309,38 @@ async function getActiveMentors() {
   return result;
 }
 
+function normalizePhoneForPassword(phone) {
+  return String(phone || '').replace(/\D/g, '');
+}
+
+async function ensureMentorUserAccount({ id, full_name, email, phone }) {
+  const normalizedEmail = normalizeEmail(email);
+  const phoneDigits = normalizePhoneForPassword(phone);
+
+  if (!normalizedEmail || !phoneDigits) {
+    return;
+  }
+
+  const [existing] = await db.query(
+    'SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1',
+    [normalizedEmail]
+  );
+
+  if (existing.length > 0) {
+    return;
+  }
+
+  const passwordHash = await hashPassword(phoneDigits);
+  await db.query(
+    'INSERT INTO users (full_name, email, password, role, mentor_id) VALUES (?, ?, ?, ?, ?)',
+    [full_name || null, normalizedEmail, passwordHash, 'mentor', Number(id)]
+  );
+}
+
 async function approveMentorById(id) {
   try {
     const [rows] = await db.query(
-      `SELECT id, status
+      `SELECT id, status, full_name, email, phone
        FROM ${MENTOR_REGISTRATION_TABLE}
        WHERE id = ?
        LIMIT 1`,
@@ -1342,6 +1371,7 @@ async function approveMentorById(id) {
 
     const mentor = await getMentorById(id);
     invalidateActiveMentorsCache();
+    await ensureMentorUserAccount(rows[0]);
 
     return {
       outcome: 'approved',

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "migrate:internship-photos": "node scripts/migrate-internship-passport-photos-to-s3.js",
-    "migrate:workshop-thumbnails": "node scripts/migrate-workshop-thumbnails-to-s3.js"
+    "migrate:workshop-thumbnails": "node scripts/migrate-workshop-thumbnails-to-s3.js",
+    "backfill:mentor-users": "node scripts/backfill-mentor-users.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.888.0",

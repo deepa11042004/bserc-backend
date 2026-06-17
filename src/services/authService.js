@@ -54,19 +54,30 @@ async function login({ email, password }) {
 
   await userModel.updateLastLogin(user.id);
 
-  const token = signToken({ userId: user.id, email: user.email, role: user.role });
+  const mentorId = user.mentor_id ? Number(user.mentor_id) : null;
+  const tokenPayload = { userId: user.id, email: user.email, role: user.role };
+  if (mentorId) {
+    tokenPayload.mentorId = mentorId;
+  }
+
+  const token = signToken(tokenPayload);
+
+  const responseUser = {
+    id: user.id,
+    full_name: user.full_name,
+    email: user.email,
+    role: user.role,
+  };
+  if (mentorId) {
+    responseUser.mentor_id = mentorId;
+  }
 
   return {
     status: 200,
     body: {
       message: 'Login successful',
       token,
-      user: {
-        id: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
-      },
+      user: responseUser,
     },
   };
 }
