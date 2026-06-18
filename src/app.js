@@ -20,6 +20,7 @@ const contactQueryRoutes = require('./routes/contactQueryRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const userDashboardRoutes = require('./routes/userDashboardRoutes');
 const projectListingRoutes = require('./routes/projectListingRoutes');
+const adminUserRoutes = require('./routes/adminUserRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const swaggerSpec = require('./config/swagger');
 const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
@@ -74,6 +75,7 @@ app.use('/api', contactQueryRoutes);
 app.use('/api', ticketRoutes);
 app.use('/api/user-dashboard', userDashboardRoutes);
 app.use('/api', projectListingRoutes);
+app.use('/api', adminUserRoutes);
 
 app.use(errorHandler);
 

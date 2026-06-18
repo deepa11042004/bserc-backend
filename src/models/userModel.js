@@ -39,6 +39,10 @@ async function updateLastLogin(id) {
   await pool.query('UPDATE users SET last_login = NOW() WHERE id = ?', [id]);
 }
 
+async function updateStatus(id, isActive) {
+  await pool.query('UPDATE users SET is_active = ? WHERE id = ?', [isActive ? 1 : 0, id]);
+}
+
 module.exports = {
   findByEmail,
   findById,
@@ -46,4 +50,5 @@ module.exports = {
   createMentorUser,
   updatePassword,
   updateLastLogin,
+  updateStatus,
 };
