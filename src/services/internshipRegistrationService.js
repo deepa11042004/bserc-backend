@@ -602,6 +602,11 @@ function normalizeRegistrationPayload(input) {
   return { payload, errors };
 }
 
+function normalizeMobileForPassword(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
 async function createUserIfMissing(connection, email, fullName, mobileNumber) {
   const [existingUsers] = await connection.query(
     'SELECT id FROM users WHERE email = ? LIMIT 1',
@@ -612,7 +617,7 @@ async function createUserIfMissing(connection, email, fullName, mobileNumber) {
     return;
   }
 
-  const hashedPassword = await hashPassword(mobileNumber);
+  const hashedPassword = await hashPassword(normalizeMobileForPassword(mobileNumber));
 
   try {
     await connection.query(
