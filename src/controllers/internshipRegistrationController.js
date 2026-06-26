@@ -120,6 +120,18 @@ async function transferInternshipRegistrationPaymentStatus(req, res, next) {
   }
 }
 
+async function updateInternshipRegistration(req, res, next) {
+  try {
+    const result = await internshipRegistrationService.updateInternshipRegistration(
+      req.params.id,
+      req.body || {}
+    );
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function getInternshipPassportPhotoUrl(req, res, next) {
   try {
     const registrationId = Number.parseInt(String(req.params.id || ''), 10);
@@ -152,5 +164,6 @@ module.exports = {
   updateInternshipFeeSettings,
   deleteInternshipRegistration,
   transferInternshipRegistrationPaymentStatus,
+  updateInternshipRegistration,
   getInternshipPassportPhotoUrl,
 };

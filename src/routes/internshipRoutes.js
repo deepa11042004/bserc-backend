@@ -104,10 +104,19 @@ router.put(
 /**
  * @openapi
  * /api/internship/registration/{id}:
+ *   patch:
+ *     tags: [Internships]
+ *     summary: Update editable fields on an internship registration entry
  *   delete:
  *     tags: [Internships]
  *     summary: Delete an internship registration entry by id
  */
+router.patch(
+  '/internship/registration/:id',
+  authAdmin,
+  internshipRegistrationController.updateInternshipRegistration
+);
+
 router.delete(
   '/internship/registration/:id',
   internshipRegistrationController.deleteInternshipRegistration

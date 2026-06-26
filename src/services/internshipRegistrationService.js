@@ -1564,6 +1564,137 @@ async function transferInternshipRegistrationPaymentStatus(rawId, input = {}) {
   }
 }
 
+async function updateInternshipRegistration(rawId, input = {}) {
+  const registrationId = parseInternshipRegistrationId(rawId);
+
+  if (!registrationId) {
+    return {
+      status: 400,
+      body: { message: 'Invalid internship registration id' },
+    };
+  }
+
+  const existingApplication = await getInternshipApplicationById(registrationId);
+
+  if (!existingApplication) {
+    return {
+      status: 404,
+      body: { message: 'Internship registration not found' },
+    };
+  }
+
+  const ALLOWED_FIELDS = [
+    'full_name', 'guardian_name', 'gender', 'dob', 'mobile_number',
+    'email', 'alternative_email', 'address', 'city', 'state', 'pin_code',
+    'institution_name', 'educational_qualification', 'internship_name',
+    'internship_designation', 'is_lateral', 'declaration_accepted',
+  ];
+
+  const updates = {};
+  const errors = [];
+
+  for (const field of ALLOWED_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(input || {}, field)) {
+      continue;
+    }
+
+    const rawValue = input[field];
+
+    switch (field) {
+      case 'full_name':
+      case 'guardian_name':
+      case 'gender':
+      case 'mobile_number':
+      case 'address':
+      case 'city':
+      case 'state':
+      case 'pin_code':
+      case 'institution_name':
+      case 'educational_qualification':
+      case 'internship_name':
+      case 'internship_designation': {
+        const value = cleanText(rawValue);
+        if (!value) {
+          errors.push(`${field} cannot be empty`);
+        } else {
+          updates[field] = value;
+        }
+        break;
+      }
+      case 'email': {
+        const value = normalizeEmail(rawValue);
+        if (!value || !EMAIL_REGEX.test(value)) {
+          errors.push('email must be a valid email address');
+        } else {
+          updates[field] = value;
+        }
+        break;
+      }
+      case 'alternative_email': {
+        const value = normalizeEmail(rawValue);
+        if (value && !EMAIL_REGEX.test(value)) {
+          errors.push('alternative_email must be a valid email address');
+        } else {
+          updates[field] = value || null;
+        }
+        break;
+      }
+      case 'dob': {
+        const value = cleanText(rawValue);
+        if (!value || !isValidDateString(value)) {
+          errors.push('dob must be a valid date in YYYY-MM-DD format');
+        } else {
+          updates[field] = value;
+        }
+        break;
+      }
+      case 'is_lateral':
+        updates[field] = toBoolean(rawValue) ? 1 : 0;
+        break;
+      case 'declaration_accepted':
+        updates[field] = toBoolean(rawValue) ? 1 : 0;
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (errors.length > 0) {
+    return {
+      status: 400,
+      body: { message: errors.join('. ') },
+    };
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return {
+      status: 400,
+      body: { message: 'No valid fields provided for update' },
+    };
+  }
+
+  const setClauses = Object.keys(updates).map((key) => `${key} = ?`).join(', ');
+  const values = [...Object.values(updates), registrationId];
+
+  await db.query(
+    `UPDATE ${INTERNSHIP_TABLE}
+     SET ${setClauses}
+     WHERE id = ?
+     LIMIT 1`,
+    values
+  );
+
+  const updatedApplication = await getInternshipApplicationById(registrationId);
+
+  return {
+    status: 200,
+    body: {
+      message: 'Internship registration updated successfully',
+      application: updatedApplication,
+    },
+  };
+}
+
 async function updateInternshipFeeSettings(input) {
   const currentSettings = await readInternshipFeeSettings();
 
@@ -1626,4 +1757,5 @@ module.exports = {
   updateInternshipFeeSettings,
   deleteInternshipRegistration,
   transferInternshipRegistrationPaymentStatus,
+  updateInternshipRegistration,
 };

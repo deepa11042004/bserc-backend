@@ -74,6 +74,56 @@ router.patch('/admin/users/:id/status', authAdmin, async (req, res) => {
   }
 });
 
+// PATCH /api/admin/users/:id/profile
+router.patch('/admin/users/:id/profile', authAdmin, async (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  const { full_name, email } = req.body || {};
+
+  if (!userId || Number.isNaN(userId)) {
+    return res.status(400).json({ message: 'Invalid user ID.' });
+  }
+
+  if (full_name === undefined && email === undefined) {
+    return res.status(400).json({ message: 'Provide at least one field to update.' });
+  }
+
+  const updates = {};
+
+  if (full_name !== undefined) {
+    updates.full_name = String(full_name || '').trim() || null;
+  }
+
+  if (email !== undefined) {
+    const trimmedEmail = String(email || '').trim().toLowerCase();
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      return res.status(400).json({ message: 'Invalid email address.' });
+    }
+    updates.email = trimmedEmail;
+  }
+
+  try {
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    if (updates.email) {
+      const existing = await userModel.findByEmail(updates.email);
+      if (existing && existing.id !== userId) {
+        return res.status(400).json({ message: 'This email is already in use by another account.' });
+      }
+    }
+
+    const setClauses = Object.keys(updates).map((k) => `${k} = ?`).join(', ');
+    const values = [...Object.values(updates), userId];
+    await pool.query(`UPDATE users SET ${setClauses} WHERE id = ? LIMIT 1`, values);
+
+    return res.json({ message: 'Profile updated successfully.', full_name: updates.full_name ?? user.full_name, email: updates.email ?? user.email });
+  } catch {
+    return res.status(500).json({ message: 'Failed to update user profile.' });
+  }
+});
+
 // PATCH /api/admin/users/:id/password
 router.patch('/admin/users/:id/password', authAdmin, async (req, res) => {
   const userId = parseInt(req.params.id, 10);
