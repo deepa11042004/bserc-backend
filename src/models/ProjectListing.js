@@ -121,7 +121,6 @@ async function ensureProjectListingsTable(connection = db) {
       id INT AUTO_INCREMENT PRIMARY KEY,
 
       -- Section 1: Personal & Institutional Details
-      enrolment_number VARCHAR(100) NOT NULL,
       full_name VARCHAR(255) NOT NULL,
       primary_email VARCHAR(255) NOT NULL,
       alternative_email VARCHAR(255) NULL,
@@ -220,7 +219,6 @@ async function ensureProjectListingsTable(connection = db) {
 function normalizeProjectListingPayload(input = {}) {
   const payload = {
     // Section 1
-    enrolment_number: cleanText(input.enrolmentNumber || input.enrolment_number),
     full_name: cleanText(input.fullName || input.full_name),
     primary_email: normalizeEmail(input.primaryEmail || input.primary_email),
     alternative_email: normalizeEmail(input.alternativeEmail || input.alternative_email) || null,
@@ -308,7 +306,6 @@ function normalizeProjectListingPayload(input = {}) {
   const errors = [];
 
   // Section 1 validations
-  if (!payload.enrolment_number) errors.push('Enrolment number is required');
   if (!payload.full_name) errors.push('Full name is required');
   if (!payload.primary_email) {
     errors.push('Primary email is required');
@@ -452,7 +449,6 @@ function normalizeProjectListingPayload(input = {}) {
 function mapProjectListingRow(row) {
   return {
     id: Number(row.id),
-    enrolment_number: cleanText(row.enrolment_number),
     full_name: cleanText(row.full_name),
     primary_email: cleanText(row.primary_email),
     alternative_email: cleanText(row.alternative_email) || null,
@@ -531,7 +527,7 @@ function mapProjectListingRow(row) {
 
 async function createProjectListing(payload, connection = db) {
   const columns = [
-    'enrolment_number', 'full_name', 'primary_email', 'alternative_email',
+    'full_name', 'primary_email', 'alternative_email',
     'whatsapp_number', 'institution', 'department', 'programme', 'programme_other',
     'is_registered', 'portal_name', 'registration_number', 'registration_date',
     'is_published', 'publication_type', 'publication_title', 'publication_venue',
@@ -550,7 +546,6 @@ async function createProjectListing(payload, connection = db) {
   ];
 
   const values = [
-    payload.enrolment_number,
     payload.full_name,
     payload.primary_email,
     payload.alternative_email,
