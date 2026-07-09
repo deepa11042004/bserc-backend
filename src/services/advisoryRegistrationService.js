@@ -287,6 +287,86 @@ async function getActiveAdvisoryMembers() {
   return getAdvisoriesByStatus(ADVISORY_STATUS_ACTIVE);
 }
 
+async function getAdvisoriesForAdmin(status, options = {}) {
+  await ensureAdvisoryRegistrationTable();
+
+  if (!VALID_ADVISORY_STATUSES.has(status)) {
+    return { advisories: [], page: 1, pageSize: 50, total: 0, totalPages: 1 };
+  }
+
+  const isExportAll = options.exportAll === true || options.exportAll === 'true';
+  const page = Number(options.page) || 1;
+  const pageSize = Number(options.pageSize) || 50;
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safePageSize = isExportAll
+    ? null
+    : (Number.isFinite(pageSize) && pageSize > 0 ? Math.min(Math.floor(pageSize), 200) : 50);
+  const offset = isExportAll ? 0 : (safePage - 1) * safePageSize;
+
+  const contributionArea = cleanText(options.contributionArea);
+  const contributionMode = cleanText(options.contributionMode);
+  const search = cleanText(options.search).toLowerCase();
+
+  const whereClauses = ['status = ?'];
+  const whereParams = [status];
+
+  if (contributionArea && contributionArea.toLowerCase() !== 'all') {
+    whereClauses.push('preferred_contributions_json LIKE ?');
+    whereParams.push(`%"${contributionArea}"%`);
+  }
+
+  if (contributionMode && contributionMode.toLowerCase() !== 'all') {
+    whereClauses.push('contribution_modes_json LIKE ?');
+    whereParams.push(`%"${contributionMode}"%`);
+  }
+
+  if (search) {
+    whereClauses.push(
+      '(LOWER(full_name) LIKE ? OR LOWER(official_email) LIKE ? OR mobile_number LIKE ?)'
+    );
+    const likeValue = `%${search}%`;
+    whereParams.push(likeValue, likeValue, `%${cleanText(options.search)}%`);
+  }
+
+  const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
+
+  const [rows] = await db.query(
+    `SELECT *
+     FROM ${ADVISORY_REGISTRATION_TABLE}
+     ${whereSql}
+     ORDER BY created_at DESC, id DESC
+     ${isExportAll ? '' : 'LIMIT ? OFFSET ?'}`,
+    isExportAll ? [...whereParams] : [...whereParams, safePageSize, offset]
+  );
+
+  const [countRows] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM ${ADVISORY_REGISTRATION_TABLE}
+     ${whereSql}`,
+    whereParams
+  );
+
+  const total = Number(countRows?.[0]?.total || 0);
+  const effectivePageSize = isExportAll ? (total || 1) : safePageSize;
+  const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
+
+  return {
+    advisories: rows.map(mapAdvisoryRecord),
+    page: safePage,
+    pageSize: safePageSize,
+    total,
+    totalPages,
+  };
+}
+
+async function getActiveAdvisoriesForAdmin(options = {}) {
+  return getAdvisoriesForAdmin(ADVISORY_STATUS_ACTIVE, options);
+}
+
+async function getPendingAdvisoriesForAdmin(options = {}) {
+  return getAdvisoriesForAdmin(ADVISORY_STATUS_PENDING, options);
+}
+
 async function approveAdvisoryById(id) {
   await ensureAdvisoryRegistrationTable();
 
@@ -391,6 +471,8 @@ module.exports = {
   getAdvisoryById,
   getPendingAdvisoryMembers,
   getActiveAdvisoryMembers,
+  getActiveAdvisoriesForAdmin,
+  getPendingAdvisoriesForAdmin,
   approveAdvisoryById,
   moveAdvisoryToPendingById,
   rejectAdvisoryById,

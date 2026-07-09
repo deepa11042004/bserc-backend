@@ -180,6 +180,40 @@ async function getActiveAdvisory(req, res) {
   }
 }
 
+async function getActiveAdvisoryAdminList(req, res) {
+  try {
+    const result = await advisoryRegistrationService.getActiveAdvisoriesForAdmin({
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      exportAll: req.query.exportAll,
+      contributionArea: req.query.contributionArea,
+      contributionMode: req.query.contributionMode,
+      search: req.query.search,
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('Admin advisory list fetch error:', err);
+    return res.status(500).json({ error: 'Failed to fetch advisory list' });
+  }
+}
+
+async function getPendingAdvisoryAdminList(req, res) {
+  try {
+    const result = await advisoryRegistrationService.getPendingAdvisoriesForAdmin({
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      exportAll: req.query.exportAll,
+      contributionArea: req.query.contributionArea,
+      contributionMode: req.query.contributionMode,
+      search: req.query.search,
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('Admin advisory requests fetch error:', err);
+    return res.status(500).json({ error: 'Failed to fetch advisory requests' });
+  }
+}
+
 async function approveAdvisory(req, res) {
   try {
     const advisoryId = parseRequestId(req.params.id);
@@ -278,6 +312,8 @@ module.exports = {
   registerAdvisory,
   getPendingAdvisory,
   getActiveAdvisory,
+  getActiveAdvisoryAdminList,
+  getPendingAdvisoryAdminList,
   approveAdvisory,
   moveAdvisoryToPending,
   rejectAdvisory,

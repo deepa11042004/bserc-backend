@@ -20,6 +20,7 @@ router.post('/advisory/register', advisoryRegistrationController.registerAdvisor
  *     summary: Get all pending advisory applications
  */
 router.get('/advisory/requests', advisoryRegistrationController.getPendingAdvisory);
+router.get('/advisory/requests-admin-list', advisoryRegistrationController.getPendingAdvisoryAdminList);
 /**
  * @openapi
  * /api/advisory/list:
@@ -28,6 +29,7 @@ router.get('/advisory/requests', advisoryRegistrationController.getPendingAdviso
  *     summary: Get all active advisory members
  */
 router.get('/advisory/list', advisoryRegistrationController.getActiveAdvisory);
+router.get('/advisory/admin-list', advisoryRegistrationController.getActiveAdvisoryAdminList);
 /**
  * @openapi
  * /api/advisory/{id}/approve:

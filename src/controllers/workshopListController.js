@@ -3,7 +3,14 @@ const { processImageToWebp } = require('../utils/imageProcessing');
 
 async function getWorkshopList(req, res) {
   try {
-    const workshops = await workshopListService.getWorkshopList();
+    const workshops = await workshopListService.getWorkshopList({
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      exportAll: req.query.exportAll,
+      mode: req.query.mode,
+      status: req.query.status,
+      search: req.query.search,
+    });
     return res.status(200).json(workshops);
   } catch (err) {
     console.error('Workshop list fetch error:', err);

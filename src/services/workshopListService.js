@@ -224,6 +224,95 @@ function buildWorkshopListQuery(registeredCountExpression, includeThumbnailS3Col
     ORDER BY wl.id DESC`;
 }
 
+function buildWorkshopListFilteredQuery(registeredCountExpression, includeThumbnailS3Columns, options) {
+  const thumbnailS3Columns = includeThumbnailS3Columns
+    ? 'wl.thumbnail_path,\n      wl.thumbnail_file_name,\n      wl.thumbnail_storage,'
+    : '';
+
+  const whereClauses = [];
+  const whereParams = [];
+
+  const mode = cleanText(options.mode);
+  if (mode && mode.toLowerCase() !== 'all') {
+    whereClauses.push('t.mode = ?');
+    whereParams.push(mode);
+  }
+
+  const status = cleanText(options.status).toLowerCase();
+  if (status && status !== 'all' && ['active', 'pending', 'inactive'].includes(status)) {
+    whereClauses.push('t.computed_status = ?');
+    whereParams.push(status);
+  }
+
+  const search = cleanText(options.search).toLowerCase();
+  if (search) {
+    whereClauses.push('LOWER(t.title) LIKE ?');
+    whereParams.push(`%${search}%`);
+  }
+
+  const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+  const isExportAll = options.exportAll === true || options.exportAll === 'true';
+  const hasPagination = options.page !== undefined || options.pageSize !== undefined;
+  const page = Number(options.page) || 1;
+  const pageSize = Number(options.pageSize) || 50;
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safePageSize = (!hasPagination || isExportAll)
+    ? null
+    : (Number.isFinite(pageSize) && pageSize > 0 ? Math.min(Math.floor(pageSize), 200) : 50);
+  const offset = safePageSize === null ? 0 : (safePage - 1) * safePageSize;
+
+  const sql = `SELECT * FROM (
+      SELECT
+        wl.id,
+        wl.title,
+        wl.description,
+        wl.eligibility,
+        wl.mode,
+        wl.workshop_date,
+        wl.start_time,
+        wl.end_time,
+        wl.duration,
+        wl.certificate,
+        wl.fee,
+        wl.created_at,
+        ${thumbnailS3Columns}
+        ${registeredCountExpression} AS total_enrollments,
+        ${registeredCountExpression} AS registered_count,
+        CASE
+          WHEN wl.workshop_date IS NULL THEN 'active'
+          WHEN wl.workshop_date > CURDATE() THEN 'pending'
+          WHEN wl.workshop_date < CURDATE() THEN 'inactive'
+          ELSE 'active'
+        END AS computed_status
+      FROM ${WORKSHOP_LIST_TABLE} wl
+    ) t
+    ${whereSql}
+    ORDER BY t.id DESC
+    ${safePageSize === null ? '' : 'LIMIT ? OFFSET ?'}`;
+
+  const countSql = `SELECT COUNT(*) AS total FROM (
+      SELECT wl.id, wl.mode, wl.title,
+        CASE
+          WHEN wl.workshop_date IS NULL THEN 'active'
+          WHEN wl.workshop_date > CURDATE() THEN 'pending'
+          WHEN wl.workshop_date < CURDATE() THEN 'inactive'
+          ELSE 'active'
+        END AS computed_status
+      FROM ${WORKSHOP_LIST_TABLE} wl
+    ) t
+    ${whereSql}`;
+
+  return {
+    sql,
+    countSql,
+    params: safePageSize === null ? [...whereParams] : [...whereParams, safePageSize, offset],
+    countParams: whereParams,
+    safePage,
+    safePageSize,
+  };
+}
+
 function buildWorkshopByIdQuery(registeredCountExpression, includeThumbnailS3Columns = true) {
   const thumbnailS3Columns = includeThumbnailS3Columns
     ? 'wl.thumbnail_path,\n      wl.thumbnail_file_name,\n      wl.thumbnail_storage,'
@@ -286,18 +375,68 @@ async function getWorkshopRowById(id, connection = db) {
   }
 }
 
-async function getWorkshopList() {
-  try {
-    const [rows] = await db.query(
-      buildWorkshopListQuery(`COALESCE(wl.${TOTAL_ENROLLMENTS_COLUMN}, 0)`, true)
-    );
+async function getWorkshopList(options = {}) {
+  const hasPagination = options.page !== undefined || options.pageSize !== undefined;
+  const isExportAll = options.exportAll === true || options.exportAll === 'true';
+  const hasFilters = Boolean(
+    cleanText(options.mode) || cleanText(options.status) || cleanText(options.search)
+  );
 
-    return rows.map(mapWorkshopRow);
+  // Preserve the plain, unfiltered array response for legacy callers
+  // (public workshop pickers/dashboards) that never send pagination or filter params.
+  if (!hasPagination && !isExportAll && !hasFilters) {
+    try {
+      const [rows] = await db.query(
+        buildWorkshopListQuery(`COALESCE(wl.${TOTAL_ENROLLMENTS_COLUMN}, 0)`, true)
+      );
+
+      return rows.map(mapWorkshopRow);
+    } catch (err) {
+      if (err && err.code === 'ER_BAD_FIELD_ERROR') {
+        const [rows] = await db.query(buildWorkshopListQuery('0', false));
+        return rows.map((row) => mapWorkshopRow({ ...row, thumbnail_path: null }));
+      }
+
+      throw err;
+    }
+  }
+
+  const registeredCountExpression = `COALESCE(wl.${TOTAL_ENROLLMENTS_COLUMN}, 0)`;
+
+  let query;
+  try {
+    query = buildWorkshopListFilteredQuery(registeredCountExpression, true, options);
+    const [rows] = await db.query(query.sql, query.params);
+    const [countRows] = await db.query(query.countSql, query.countParams);
+
+    const total = Number(countRows?.[0]?.total || 0);
+    const effectivePageSize = query.safePageSize ?? (total || 1);
+    const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
+
+    return {
+      data: rows.map(mapWorkshopRow),
+      page: query.safePage,
+      pageSize: query.safePageSize,
+      total,
+      totalPages,
+    };
   } catch (err) {
-    // If migration is not yet applied, return 0 so existing features keep working.
     if (err && err.code === 'ER_BAD_FIELD_ERROR') {
-      const [rows] = await db.query(buildWorkshopListQuery('0', false));
-      return rows.map((row) => mapWorkshopRow({ ...row, thumbnail_path: null }));
+      query = buildWorkshopListFilteredQuery('0', false, options);
+      const [rows] = await db.query(query.sql, query.params);
+      const [countRows] = await db.query(query.countSql, query.countParams);
+
+      const total = Number(countRows?.[0]?.total || 0);
+      const effectivePageSize = query.safePageSize ?? (total || 1);
+      const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
+
+      return {
+        data: rows.map((row) => mapWorkshopRow({ ...row, thumbnail_path: null })),
+        page: query.safePage,
+        pageSize: query.safePageSize,
+        total,
+        totalPages,
+      };
     }
 
     throw err;
