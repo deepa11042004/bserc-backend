@@ -459,14 +459,64 @@ async function createInstitutionalRegistration(payload, connection = db) {
   return rows[0] ? mapInstitutionalRegistrationRow(rows[0]) : null;
 }
 
-async function getInstitutionalRegistrations(connection = db) {
+async function getInstitutionalRegistrations(options = {}, connection = db) {
+  const isExportAll = options.exportAll === true || options.exportAll === 'true';
+  const page = Number(options.page) || 1;
+  const pageSize = Number(options.pageSize) || 50;
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safePageSize = isExportAll
+    ? null
+    : (Number.isFinite(pageSize) && pageSize > 0 ? Math.min(Math.floor(pageSize), 200) : 50);
+  const offset = isExportAll ? 0 : (safePage - 1) * safePageSize;
+
+  const paymentStatus = String(options.paymentStatus || '').trim().toLowerCase();
+  const search = String(options.search || '').trim().toLowerCase();
+
+  const whereClauses = [];
+  const whereParams = [];
+
+  if (paymentStatus && paymentStatus !== 'all' && PAYMENT_STATUS_VALUES.has(paymentStatus)) {
+    whereClauses.push('LOWER(payment_status) = ?');
+    whereParams.push(paymentStatus);
+  }
+
+  if (search) {
+    whereClauses.push(
+      '(LOWER(institute_name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(contact_name) LIKE ?)'
+    );
+    const likeValue = `%${search}%`;
+    whereParams.push(likeValue, likeValue, likeValue);
+  }
+
+  const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
   const [rows] = await connection.query(
     `SELECT *
      FROM ${INSTITUTIONAL_REGISTRATION_TABLE}
-     ORDER BY created_at DESC, id DESC`
+     ${whereSql}
+     ORDER BY created_at DESC, id DESC
+     ${isExportAll ? '' : 'LIMIT ? OFFSET ?'}`,
+    isExportAll ? [...whereParams] : [...whereParams, safePageSize, offset]
   );
 
-  return rows.map(mapInstitutionalRegistrationRow);
+  const [countRows] = await connection.query(
+    `SELECT COUNT(*) AS total
+     FROM ${INSTITUTIONAL_REGISTRATION_TABLE}
+     ${whereSql}`,
+    whereParams
+  );
+
+  const total = Number(countRows?.[0]?.total || 0);
+  const effectivePageSize = isExportAll ? (total || 1) : safePageSize;
+  const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
+
+  return {
+    data: rows.map(mapInstitutionalRegistrationRow),
+    page: safePage,
+    pageSize: safePageSize,
+    total,
+    totalPages,
+  };
 }
 
 async function deleteInstitutionalRegistration(rawId, connection = db) {

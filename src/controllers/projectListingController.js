@@ -18,6 +18,9 @@ async function getProjectListings(req, res, next) {
       page: req.query.page,
       pageSize: req.query.pageSize,
       emailSearch: req.query.emailSearch,
+      projectTheme: req.query.projectTheme,
+      projectLevel: req.query.projectLevel,
+      exportAll: req.query.exportAll,
     });
     return res.status(result.status).json(result.body);
   } catch (err) {

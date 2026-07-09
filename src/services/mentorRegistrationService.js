@@ -1309,6 +1309,95 @@ async function getActiveMentors() {
   return result;
 }
 
+async function getMentorsForAdmin(status, options = {}) {
+  if (!VALID_MENTOR_STATUSES.has(status)) {
+    return { mentors: [], page: 1, pageSize: 50, total: 0, totalPages: 1 };
+  }
+
+  const isExportAll = options.exportAll === true || options.exportAll === 'true';
+  const page = Number(options.page) || 1;
+  const pageSize = Number(options.pageSize) || 50;
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safePageSize = isExportAll
+    ? null
+    : (Number.isFinite(pageSize) && pageSize > 0 ? Math.min(Math.floor(pageSize), 200) : 50);
+  const offset = isExportAll ? 0 : (safePage - 1) * safePageSize;
+
+  const track = cleanText(options.track);
+  const availability = cleanText(options.availability);
+  const search = cleanText(options.search).toLowerCase();
+
+  const whereClauses = ['status = ?'];
+  const whereParams = [status];
+
+  if (track && track.toLowerCase() !== 'all') {
+    whereClauses.push('primary_track = ?');
+    whereParams.push(track);
+  }
+
+  if (availability && availability.toLowerCase() !== 'all') {
+    whereClauses.push('availability = ?');
+    whereParams.push(availability);
+  }
+
+  if (search) {
+    whereClauses.push('(LOWER(full_name) LIKE ? OR LOWER(email) LIKE ? OR phone LIKE ?)');
+    const likeValue = `%${search}%`;
+    whereParams.push(likeValue, likeValue, `%${cleanText(options.search)}%`);
+  }
+
+  const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
+  const detailColumns = await getMentorDetailColumns();
+
+  const [rows] = await db.query(
+    `SELECT
+      ${detailColumns},
+      status,
+      agg.average_rating,
+      COALESCE(agg.total_ratings, 0) AS total_ratings
+     FROM ${MENTOR_REGISTRATION_TABLE}
+     LEFT JOIN (
+       SELECT mentor_id,
+         ROUND(AVG(rating), 2) AS average_rating,
+         COUNT(*) AS total_ratings
+       FROM mentor_ratings
+       WHERE user_name IS NOT NULL OR user_email IS NOT NULL
+       GROUP BY mentor_id
+     ) agg ON agg.mentor_id = ${MENTOR_REGISTRATION_TABLE}.id
+     ${whereSql}
+     ORDER BY created_at DESC, id DESC
+     ${isExportAll ? '' : 'LIMIT ? OFFSET ?'}`,
+    isExportAll ? [...whereParams] : [...whereParams, safePageSize, offset]
+  );
+
+  const [countRows] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM ${MENTOR_REGISTRATION_TABLE}
+     ${whereSql}`,
+    whereParams
+  );
+
+  const total = Number(countRows?.[0]?.total || 0);
+  const effectivePageSize = isExportAll ? (total || 1) : safePageSize;
+  const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
+
+  return {
+    mentors: rows.map(mapMentorDetails),
+    page: safePage,
+    pageSize: safePageSize,
+    total,
+    totalPages,
+  };
+}
+
+async function getActiveMentorsForAdmin(options = {}) {
+  return getMentorsForAdmin(MENTOR_STATUS_ACTIVE, options);
+}
+
+async function getPendingMentorsForAdmin(options = {}) {
+  return getMentorsForAdmin(MENTOR_STATUS_PENDING, options);
+}
+
 function normalizePhoneForPassword(phone) {
   return String(phone || '').replace(/\D/g, '');
 }
@@ -1551,6 +1640,8 @@ module.exports = {
   getMentorFileById,
   getPendingMentors,
   getActiveMentors,
+  getActiveMentorsForAdmin,
+  getPendingMentorsForAdmin,
   approveMentorById,
   moveMentorToPendingById,
   rejectMentorById,

@@ -622,18 +622,38 @@ async function createProjectListing(payload, connection = db) {
   return rows[0] ? mapProjectListingRow(rows[0]) : null;
 }
 
-async function getProjectListingsPaginated({ page = 1, pageSize = 20, emailSearch = '' } = {}, connection = db) {
+async function getProjectListingsPaginated(
+  { page = 1, pageSize = 20, emailSearch = '', projectTheme = '', projectLevel = '', exportAll = false } = {},
+  connection = db
+) {
+  const isExportAll = exportAll === true || exportAll === 'true';
   const safePage = Math.max(1, Number(page) || 1);
-  const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
-  const offset = (safePage - 1) * safePageSize;
+  const safePageSize = isExportAll
+    ? null
+    : Math.min(100, Math.max(1, Number(pageSize) || 20));
+  const offset = isExportAll ? 0 : (safePage - 1) * safePageSize;
 
-  let whereClause = '';
+  const whereClauses = [];
   const queryParams = [];
 
   if (emailSearch) {
-    whereClause = 'WHERE LOWER(primary_email) LIKE LOWER(?)';
+    whereClauses.push('LOWER(primary_email) LIKE LOWER(?)');
     queryParams.push(`%${emailSearch}%`);
   }
+
+  const normalizedTheme = cleanText(projectTheme);
+  if (normalizedTheme && normalizedTheme.toLowerCase() !== 'all') {
+    whereClauses.push('project_theme = ?');
+    queryParams.push(normalizedTheme);
+  }
+
+  const normalizedLevel = cleanText(projectLevel);
+  if (normalizedLevel && normalizedLevel.toLowerCase() !== 'all') {
+    whereClauses.push('project_level = ?');
+    queryParams.push(normalizedLevel);
+  }
+
+  const whereClause = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
   const [[{ total }]] = await connection.query(
     `SELECT COUNT(*) as total FROM ${PROJECT_LISTING_TABLE} ${whereClause}`,
@@ -643,9 +663,11 @@ async function getProjectListingsPaginated({ page = 1, pageSize = 20, emailSearc
   const [rows] = await connection.query(
     `SELECT * FROM ${PROJECT_LISTING_TABLE} ${whereClause}
      ORDER BY created_at DESC, id DESC
-     LIMIT ? OFFSET ?`,
-    [...queryParams, safePageSize, offset]
+     ${isExportAll ? '' : 'LIMIT ? OFFSET ?'}`,
+    isExportAll ? [...queryParams] : [...queryParams, safePageSize, offset]
   );
+
+  const effectivePageSize = isExportAll ? (Number(total) || 1) : safePageSize;
 
   return {
     data: rows.map(mapProjectListingRow),
@@ -653,7 +675,7 @@ async function getProjectListingsPaginated({ page = 1, pageSize = 20, emailSearc
       page: safePage,
       pageSize: safePageSize,
       total: Number(total),
-      totalPages: Math.ceil(Number(total) / safePageSize),
+      totalPages: Math.max(1, Math.ceil(Number(total) / effectivePageSize)),
     },
   };
 }

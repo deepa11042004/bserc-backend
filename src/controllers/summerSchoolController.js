@@ -38,7 +38,15 @@ async function createStudentRegistration(req, res, next) {
 
 async function getStudentRegistrations(req, res, next) {
   try {
-    const result = await summerSchoolService.listStudentRegistrations();
+    const result = await summerSchoolService.listStudentRegistrations({
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      exportAll: req.query.exportAll,
+      category: req.query.category,
+      nationality: req.query.nationality,
+      paymentStatus: req.query.paymentStatus,
+      emailSearch: req.query.emailSearch,
+    });
     return res.status(result.status).json(result.body);
   } catch (err) {
     return next(err);

@@ -52,7 +52,9 @@ router.post(
 );
 
 router.get('/mentor/requests', mentorRegistrationController.getPendingMentors);
+router.get('/mentor/requests-admin-list', mentorRegistrationController.getPendingMentorsAdminList);
 router.get('/mentor/list', mentorRegistrationController.getActiveMentors);
+router.get('/mentor/admin-list', mentorRegistrationController.getActiveMentorsAdminList);
 router.patch('/mentor/:id/approve', mentorRegistrationController.approveMentor);
 router.patch('/mentor/:id/pending', mentorRegistrationController.moveMentorToPending);
 router.delete('/mentor/:id/reject', mentorRegistrationController.rejectMentor);

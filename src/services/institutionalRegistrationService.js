@@ -858,16 +858,20 @@ async function deleteInstitutionalRegistration(rawId) {
   };
 }
 
-async function listInstitutionalRegistrations() {
+async function listInstitutionalRegistrations(options = {}) {
   await InstitutionalRegistration.ensureInstitutionalRegistrationTable();
 
-  const registrations = await InstitutionalRegistration.getInstitutionalRegistrations();
+  const result = await InstitutionalRegistration.getInstitutionalRegistrations(options);
 
   return {
     status: 200,
     body: {
       success: true,
-      data: registrations,
+      data: result.data,
+      page: result.page,
+      pageSize: result.pageSize,
+      total: result.total,
+      totalPages: result.totalPages,
     },
   };
 }

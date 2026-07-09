@@ -534,6 +534,40 @@ async function getActiveMentors(req, res) {
   }
 }
 
+async function getActiveMentorsAdminList(req, res) {
+  try {
+    const result = await mentorRegistrationService.getActiveMentorsForAdmin({
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      exportAll: req.query.exportAll,
+      track: req.query.track,
+      availability: req.query.availability,
+      search: req.query.search,
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('Admin mentor list fetch error:', err);
+    return res.status(500).json({ error: 'Failed to fetch mentor list' });
+  }
+}
+
+async function getPendingMentorsAdminList(req, res) {
+  try {
+    const result = await mentorRegistrationService.getPendingMentorsForAdmin({
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      exportAll: req.query.exportAll,
+      track: req.query.track,
+      availability: req.query.availability,
+      search: req.query.search,
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('Admin mentor requests fetch error:', err);
+    return res.status(500).json({ error: 'Failed to fetch mentor requests' });
+  }
+}
+
 async function approveMentor(req, res) {
   try {
     const mentorId = parseMentorId(req.params.id);
@@ -746,6 +780,8 @@ module.exports = {
   getMentorProfilePhoto,
   getPendingMentors,
   getActiveMentors,
+  getActiveMentorsAdminList,
+  getPendingMentorsAdminList,
   approveMentor,
   moveMentorToPending,
   rejectMentor,

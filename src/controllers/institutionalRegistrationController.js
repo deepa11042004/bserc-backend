@@ -49,7 +49,13 @@ async function createInstitutionalRegistration(req, res, next) {
 
 async function getInstitutionalRegistrations(req, res, next) {
   try {
-    const result = await institutionalRegistrationService.listInstitutionalRegistrations();
+    const result = await institutionalRegistrationService.listInstitutionalRegistrations({
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      exportAll: req.query.exportAll,
+      paymentStatus: req.query.paymentStatus,
+      search: req.query.search,
+    });
     return res.status(result.status).json(result.body);
   } catch (err) {
     return next(err);

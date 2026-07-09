@@ -540,14 +540,74 @@ async function isStudentEmailTaken(email, connection = db) {
   return rows.length > 0;
 }
 
-async function getStudentRegistrations(connection = db) {
+async function getStudentRegistrations(options = {}, connection = db) {
+  const isExportAll = options.exportAll === true || options.exportAll === 'true';
+  const page = Number(options.page) || 1;
+  const pageSize = Number(options.pageSize) || 50;
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safePageSize = isExportAll
+    ? null
+    : (Number.isFinite(pageSize) && pageSize > 0 ? Math.min(Math.floor(pageSize), 200) : 50);
+  const offset = isExportAll ? 0 : (safePage - 1) * safePageSize;
+
+  const category = String(options.category || '').trim().toLowerCase();
+  const nationality = String(options.nationality || '').trim().toLowerCase();
+  const paymentStatus = String(options.paymentStatus || '').trim().toLowerCase();
+  const emailSearch = String(options.emailSearch || '').trim().toLowerCase();
+
+  const whereClauses = [];
+  const whereParams = [];
+
+  if (category === 'general') {
+    whereClauses.push("LOWER(category) = 'general category'");
+  } else if (category === 'ews') {
+    whereClauses.push("LOWER(category) LIKE 'ews%'");
+  }
+
+  if (nationality === 'indian' || nationality === 'other') {
+    whereClauses.push('LOWER(nationality) = ?');
+    whereParams.push(nationality);
+  }
+
+  if (paymentStatus && paymentStatus !== 'all') {
+    whereClauses.push('LOWER(payment_status) = ?');
+    whereParams.push(paymentStatus);
+  }
+
+  if (emailSearch) {
+    whereClauses.push('LOWER(email) LIKE ?');
+    whereParams.push(`%${emailSearch}%`);
+  }
+
+  const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
   const [rows] = await connection.query(
     `SELECT *
      FROM ${STUDENT_REGISTRATION_TABLE}
-     ORDER BY created_at DESC, id DESC`
+     ${whereSql}
+     ORDER BY created_at DESC, id DESC
+     ${isExportAll ? '' : 'LIMIT ? OFFSET ?'}`,
+    isExportAll ? [...whereParams] : [...whereParams, safePageSize, offset]
   );
 
-  return rows.map(mapStudentRegistrationRow);
+  const [countRows] = await connection.query(
+    `SELECT COUNT(*) AS total
+     FROM ${STUDENT_REGISTRATION_TABLE}
+     ${whereSql}`,
+    whereParams
+  );
+
+  const total = Number(countRows?.[0]?.total || 0);
+  const effectivePageSize = isExportAll ? (total || 1) : safePageSize;
+  const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
+
+  return {
+    data: rows.map(mapStudentRegistrationRow),
+    page: safePage,
+    pageSize: safePageSize,
+    total,
+    totalPages,
+  };
 }
 
 module.exports = {

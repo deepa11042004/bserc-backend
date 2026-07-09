@@ -1222,15 +1222,19 @@ async function verifyPaymentAndRegister(payload) {
   };
 }
 
-async function listStudentRegistrations() {
+async function listStudentRegistrations(options = {}) {
   await StudentRegistration.ensureStudentRegistrationTable();
-  const registrations = await StudentRegistration.getStudentRegistrations();
+  const result = await StudentRegistration.getStudentRegistrations(options);
 
   return {
     status: 200,
     body: {
       success: true,
-      data: registrations,
+      data: result.data,
+      page: result.page,
+      pageSize: result.pageSize,
+      total: result.total,
+      totalPages: result.totalPages,
     },
   };
 }

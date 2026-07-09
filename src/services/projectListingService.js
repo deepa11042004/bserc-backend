@@ -87,12 +87,12 @@ async function submitProjectListing(input = {}, uploadedFile = null) {
 
 // ─── Get project listings (admin) ────────────────────────────────────────────
 
-async function getProjectListings({ page, pageSize, emailSearch } = {}) {
+async function getProjectListings({ page, pageSize, emailSearch, projectTheme, projectLevel, exportAll } = {}) {
   await ensureTable();
 
   try {
     const result = await getProjectListingsPaginated(
-      { page, pageSize, emailSearch },
+      { page, pageSize, emailSearch, projectTheme, projectLevel, exportAll },
       db
     );
 
