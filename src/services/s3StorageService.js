@@ -327,6 +327,74 @@ async function streamMouSupportingDocument({ s3Path }) {
   };
 }
 
+function buildCollaborationSupportingDocumentKey({ collaborationRequestId, originalName, mimeType }) {
+  const now = new Date();
+  const year = String(now.getUTCFullYear());
+  const timestamp = now.toISOString().replace(/[:.]/g, '-');
+  const random = crypto.randomBytes(6).toString('hex');
+  const idSlug = sanitizeSegment(collaborationRequestId || 'unknown') || 'unknown';
+  const extension = safeExtension(originalName, mimeType);
+
+  return `collaboration/requests/${year}/${idSlug}-${timestamp}-${random}${extension}`;
+}
+
+async function uploadCollaborationSupportingDocument({
+  buffer,
+  mimeType,
+  originalName,
+  collaborationRequestId,
+}) {
+  if (!Buffer.isBuffer(buffer)) {
+    throw new Error('Missing supporting document buffer for collaboration upload.');
+  }
+
+  const bucket = getBucketName();
+  if (!bucket) {
+    throw new Error('S3 bucket name is missing. Set AWS_S3_BUCKET in the environment.');
+  }
+
+  const key = buildCollaborationSupportingDocumentKey({
+    collaborationRequestId,
+    originalName,
+    mimeType,
+  });
+  const client = getS3Client();
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType || 'application/octet-stream',
+    }),
+  );
+
+  return { bucket, key, s3Path: `s3://${bucket}/${key}` };
+}
+
+async function streamCollaborationSupportingDocument({ s3Path }) {
+  const parsed = parseS3Path(s3Path);
+  if (!parsed) {
+    throw new Error('Invalid S3 path for collaboration supporting document.');
+  }
+
+  const client = getS3Client();
+  const response = await client.send(
+    new GetObjectCommand({ Bucket: parsed.bucket, Key: parsed.key }),
+  );
+
+  const chunks = [];
+  for await (const chunk of response.Body) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return {
+    buffer: Buffer.concat(chunks),
+    contentType: response.ContentType || 'application/octet-stream',
+    contentLength: response.ContentLength || null,
+  };
+}
+
 async function uploadHeroSlideMedia({ buffer, mimeType, originalName, slideId }) {
   if (!Buffer.isBuffer(buffer)) {
     throw new Error('Missing media buffer for hero slide upload.');
@@ -756,6 +824,8 @@ module.exports = {
   deleteWorkshopThumbnail,
   uploadMouSupportingDocument,
   streamMouSupportingDocument,
+  uploadCollaborationSupportingDocument,
+  streamCollaborationSupportingDocument,
   uploadMentorResume,
   uploadMentorProfilePhoto,
   streamMentorRegistrationFile,
