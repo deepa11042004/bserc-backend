@@ -807,6 +807,70 @@ async function uploadProjectListingSupportingDoc({
   return { bucket, key, s3Path: `s3://${bucket}/${key}` };
 }
 
+// ---------------------------------------------------------------------------
+// Apprenticeship application file helpers
+// ---------------------------------------------------------------------------
+
+function buildApprenticeshipFileKey({ email, field, originalName, mimeType }) {
+  const now = new Date();
+  const year = String(now.getUTCFullYear());
+  const timestamp = now.toISOString().replace(/[:.]/g, '-');
+  const random = crypto.randomBytes(6).toString('hex');
+  const emailSlug = sanitizeSegment(email || 'unknown') || 'unknown';
+  const fieldSlug = sanitizeSegment(field || 'file') || 'file';
+  const extension = safeExtension(originalName, mimeType);
+
+  return `apprenticeship/applications/${year}/${emailSlug}/${fieldSlug}/${timestamp}-${random}${extension}`;
+}
+
+async function uploadApprenticeshipFile({ buffer, mimeType, originalName, email, field }) {
+  if (!Buffer.isBuffer(buffer)) {
+    throw new Error('Missing file buffer for apprenticeship upload.');
+  }
+
+  const bucket = getBucketName();
+  if (!bucket) {
+    throw new Error('S3 bucket name is missing. Set AWS_S3_BUCKET in the environment.');
+  }
+
+  const key = buildApprenticeshipFileKey({ email, field, originalName, mimeType });
+  const client = getS3Client();
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType || 'application/octet-stream',
+    }),
+  );
+
+  return { bucket, key, s3Path: `s3://${bucket}/${key}` };
+}
+
+async function streamApprenticeshipFile({ s3Path }) {
+  const parsed = parseS3Path(s3Path);
+  if (!parsed) {
+    throw new Error('Invalid S3 path for apprenticeship file.');
+  }
+
+  const client = getS3Client();
+  const response = await client.send(
+    new GetObjectCommand({ Bucket: parsed.bucket, Key: parsed.key }),
+  );
+
+  const chunks = [];
+  for await (const chunk of response.Body) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return {
+    buffer: Buffer.concat(chunks),
+    contentType: response.ContentType || 'application/octet-stream',
+    contentLength: response.ContentLength || null,
+  };
+}
+
 module.exports = {
   uploadInternshipPassportPhoto,
   getPresignedObjectUrl,
@@ -830,4 +894,6 @@ module.exports = {
   uploadMentorProfilePhoto,
   streamMentorRegistrationFile,
   uploadProjectListingSupportingDoc,
+  uploadApprenticeshipFile,
+  streamApprenticeshipFile,
 };

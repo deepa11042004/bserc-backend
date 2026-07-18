@@ -13,6 +13,7 @@ const institutionalRegistrationRoutes = require('./routes/institutionalRegistrat
 const mouRequestRoutes = require('./routes/mouRequestRoutes');
 const advisoryRoutes = require('./routes/advisoryRoutes');
 const collaborationRoutes = require('./routes/collaborationRoutes');
+const apprenticeshipRoutes = require('./routes/apprenticeshipRoutes');
 const heroSlideRoutes = require('./routes/heroSlideRoutes');
 const footerNewsRoutes = require('./routes/footerNewsRoutes');
 const announcementBannerRoutes = require('./routes/announcementBannerRoutes');
@@ -69,6 +70,7 @@ app.use('/api', institutionalRegistrationRoutes);
 app.use('/api', mouRequestRoutes);
 app.use('/api', advisoryRoutes);
 app.use('/api', collaborationRoutes);
+app.use('/api', apprenticeshipRoutes);
 app.use('/api', heroSlideRoutes);
 app.use('/api', footerNewsRoutes);
 app.use('/api', announcementBannerRoutes);
